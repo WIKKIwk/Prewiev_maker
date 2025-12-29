@@ -1,0 +1,32 @@
+# Go build output
+bin
+*.exe
+*.test
+*.out
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# Logs
+logs
+*.log
+
+# Misc
+*.md
+!README.md
