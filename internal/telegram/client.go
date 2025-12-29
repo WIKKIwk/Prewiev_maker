@@ -94,6 +94,38 @@ func (c *Client) SendText(chatID int64, text string) error {
 	return nil
 }
 
+func (c *Client) SendTextWithKeyboard(chatID int64, text string, kb tgbotapi.InlineKeyboardMarkup) (int, error) {
+	parts := splitByBytes(text, 4096)
+	lastID := 0
+	for i, p := range parts {
+		msg := tgbotapi.NewMessage(chatID, p)
+		if i == len(parts)-1 {
+			msg.ReplyMarkup = kb
+		}
+		sent, err := c.bot.Send(msg)
+		if err != nil {
+			return 0, err
+		}
+		lastID = sent.MessageID
+	}
+	return lastID, nil
+}
+
+func (c *Client) EditTextWithKeyboard(chatID int64, messageID int, text string, kb tgbotapi.InlineKeyboardMarkup) error {
+	text = truncateByBytes(text, 4096)
+	edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+	edit.ReplyMarkup = &kb
+	_, err := c.bot.Send(edit)
+	return err
+}
+
+func (c *Client) AnswerCallback(callbackID string, text string, showAlert bool) error {
+	cb := tgbotapi.NewCallback(callbackID, truncateByBytes(text, 180))
+	cb.ShowAlert = showAlert
+	_, err := c.bot.Request(cb)
+	return err
+}
+
 func (c *Client) SendPhotoDataURL(chatID int64, dataURL string, caption string) error {
 	mimeType, base64Data, err := parseDataURL(dataURL)
 	if err != nil {
