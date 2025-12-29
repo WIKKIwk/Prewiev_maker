@@ -1,0 +1,1823 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>프리미엄 제품샷 생성기</title>
+
+  <style>
+    /* =========================
+       THEME / BASE STYLES
+    ========================== */
+    :root{
+      --bg:#0b0f19;
+      --t:#e5e7eb;
+      --m:#9ca3af;z 
+      --b:#243041;
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+      --accent: rgba(99,102,241,.95);
+      --accent2: rgba(79,70,229,.95);
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Noto Sans KR,sans-serif;
+      margin:0;
+      background:
+        radial-gradient(900px 480px at 20% 0%, rgba(99,102,241,.16), transparent 60%),
+        radial-gradient(900px 480px at 85% 15%, rgba(16,185,129,.10), transparent 55%),
+        var(--bg);
+      color:var(--t)
+    }
+    .wrap{max-width:920px;margin:24px auto;padding:0 16px}
+    .card{
+      border:1px solid var(--b);
+      border-radius:16px;
+      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      padding:16px;
+      box-shadow:var(--shadow)
+    }
+
+    /* =========================
+       HERO (Banner + overlay checkboxes)
+    ========================== */
+    .hero{
+      border:1px solid var(--b);
+      background:rgba(255,255,255,.02);
+      border-radius:14px;
+      overflow:hidden;
+      margin-bottom:14px;
+    }
+    .heroViewport{position:relative;width:100%}
+    .heroViewport img{
+      display:block;
+      width:100%;
+      height:auto;
+      filter:saturate(1.05) contrast(1.02);
+      user-select:none;
+      -webkit-user-drag:none;
+    }
+
+    /* ✅ 체크박스 오버레이: 배너 이미지를 3×3 셀처럼 나눠서
+       각 셀 "하단 가운데"에 체크박스 배치 */
+    .heroOverlay{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+    }
+    .overlayGrid{
+      width:100%;
+      height:100%;
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      grid-template-rows:repeat(3, 1fr);
+    }
+    .cellPick{
+      pointer-events:auto;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+      padding-bottom:10px;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .cellPick input{
+      width:30px;
+      height:30px;
+      accent-color: rgba(99,102,241,.95);
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,.65));
+      cursor:pointer;
+    }
+    .cellPick.locked{ pointer-events:none; opacity:.75; }
+
+    /* Carousel arrows (optional) */
+    .heroNav{
+      position:absolute;
+      top:50%;
+      transform:translateY(-50%);
+      width:42px;height:42px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(11,18,32,.55);
+      backdrop-filter: blur(10px);
+      color:var(--t);
+      cursor:pointer;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      font-size:22px;
+      box-shadow: 0 18px 60px rgba(0,0,0,.45);
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .heroNav:hover{filter:brightness(1.06)}
+    .heroNav.left{left:10px}
+    .heroNav.right{right:10px}
+    .heroNav.show{display:flex}
+
+    .heroStatus{
+      margin-top:8px;
+      font-size:12px;
+      color:var(--m);
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    /* =========================
+       FORM
+    ========================== */
+    h1{font-size:16px;margin:0 0 12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    label{font-size:12px;color:var(--m);display:block;margin:6px 0}
+    select,input,button{font:inherit}
+    select,input{
+      height:38px;border:1px solid var(--b);border-radius:12px;padding:0 10px;
+      background:rgba(11,18,32,.9);color:var(--t);min-width:240px;
+      outline:none;
+    }
+    select:focus,input:focus{border-color:rgba(99,102,241,.75);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+    button{height:38px;border:1px solid var(--b);border-radius:12px;padding:0 12px;background:rgba(11,18,32,.9);color:var(--t);cursor:pointer}
+    button.primary{background:linear-gradient(180deg, var(--accent), var(--accent2));border-color:rgba(99,102,241,.55)}
+    button.primary:hover{filter:brightness(1.05)}
+
+    /* =========================
+       TABS
+    ========================== */
+    .tabsWrap{width:100%;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+    .tabs{display:inline-flex;border:1px solid var(--b);border-radius:12px;overflow:hidden;background:rgba(11,18,32,.55)}
+    .tabBtn{
+      height:38px;padding:0 12px;border:0;border-right:1px solid var(--b);
+      background:transparent;color:var(--m);cursor:pointer
+    }
+    .tabBtn:last-child{border-right:0}
+    .tabBtn.active{
+      color:var(--t);
+      background:linear-gradient(180deg, rgba(99,102,241,.28), rgba(79,70,229,.18));
+    }
+    .presetBlock{display:none}
+    .presetBlock.show{display:block}
+
+    /* 숨김 출력 */
+    #hiddenOut{position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0}
+
+    /* Copy Bar */
+    .copyBar{
+      margin-top:32px;
+      width:100%;
+      padding:12px;
+      border:1px solid var(--b);
+      border-radius:18px;
+      background:rgba(11,18,32,.72);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 60px rgba(0,0,0,.55);
+    }
+    .copyBig{
+      width:100%;
+      height:92px;
+      border-radius:18px;
+      font-weight:900;
+      font-size:22px;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:14px;
+      box-shadow: 0 18px 46px rgba(0,0,0,.45);
+      transition: transform .08s ease, filter .12s ease, box-shadow .12s ease;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .copyBig:hover{
+      filter:brightness(1.07);
+      box-shadow: 0 22px 56px rgba(0,0,0,.55);
+    }
+    .copyBig:active{
+      transform: translateY(3px) scale(.985);
+      filter:brightness(.98);
+      box-shadow: 0 12px 30px rgba(0,0,0,.50);
+    }
+    .copyIcon{font-size:24px;opacity:.95;}
+
+    /* =========================
+       GENERATION / RESULTS
+    ========================== */
+    .resultGrid{
+      width:100%;
+      display:grid;
+      gap:10px;
+      margin-top:12px;
+    }
+    .resultItem{
+      border:1px solid var(--b);
+      border-radius:14px;
+      overflow:hidden;
+      background:rgba(11,18,32,.6);
+      box-shadow: 0 18px 46px rgba(0,0,0,.35);
+    }
+    .resultItem img{
+      display:block;
+      width:100%;
+      height:auto;
+      user-select:none;
+      -webkit-user-drag:none;
+    }
+    .resultItem .meta{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:8px 10px;
+      font-size:12px;
+      color:var(--m);
+    }
+    .resultItem .meta a{
+      color:var(--t);
+      text-decoration:none;
+      border:1px solid rgba(255,255,255,.12);
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(11,18,32,.45);
+    }
+    .resultItem .meta a:hover{filter:brightness(1.06)}
+
+    /* Toast */
+    .toast{
+      position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+      background:rgba(17,24,39,.92);
+      border:1px solid rgba(255,255,255,.08);
+      color:#fff;padding:10px 12px;border-radius:999px;font-size:12px;
+      opacity:0;pointer-events:none;transition:opacity .18s ease;
+      box-shadow:var(--shadow)
+    }
+    .toast.show{opacity:1}
+
+    /* Fallback Modal */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;padding:16px}
+    .overlay.show{display:flex}
+    .modal{width:min(980px,100%);background:rgba(15,23,42,.98);border-radius:14px;border:1px solid var(--b);box-shadow:var(--shadow);padding:12px}
+    .modalHead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+    .modalTitle{font-size:13px;color:var(--t);line-height:1.35}
+    .modal textarea{
+      width:100%;height:min(62vh,560px);
+      border:1px solid var(--b);border-radius:12px;padding:10px;
+      background:rgba(11,18,32,.9);color:var(--t);
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:12px;line-height:1.35
+    }
+    .modalBtn{height:34px;border:1px solid var(--b);border-radius:10px;background:rgba(11,18,32,.9);color:var(--t);cursor:pointer;padding:0 10px;white-space:nowrap}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+
+      <!-- HERO -->
+      <div class="hero">
+        <div class="heroViewport">
+          <img id="heroImg" src="./banner.svg" alt="Banner" loading="lazy" />
+
+          <!-- ✅ 오버레이 체크박스 9개 (배너를 3×3처럼) -->
+          <div class="heroOverlay" aria-label="프레임 선택 오버레이">
+            <div class="overlayGrid" id="overlayGrid"></div>
+          </div>
+
+          <!-- optional carousel arrows -->
+          <button class="heroNav left" id="heroPrev" type="button" aria-label="이전 이미지">‹</button>
+          <button class="heroNav right" id="heroNext" type="button" aria-label="다음 이미지">›</button>
+        </div>
+      </div>
+
+      <div class="heroStatus">
+        <span id="selStatus" style="display:none">선택 9/9</span>
+
+      </div>
+
+
+<div style="display:flex;gap:8px;justify-content:flex-end;margin:-5px 0 10px;">
+  <button id="langKR" type="button">KR</button>
+  <button id="langEN" type="button">EN</button>
+</div>
+
+
+
+      <h1 data-i18n="h1.title" style="margin-top:12px">프리미엄 제품샷 생성기</h1>
+
+      <div class="row">
+        <!-- OUTPUT MODE TABS -->
+        <div class="tabsWrap">
+          <div style="min-width:240px">
+            <label data-i18n="label.outputPreset">출력 프리셋</label>
+            <div class="tabs" role="tablist" aria-label="출력 프리셋">
+<button class="tabBtn active" id="tabGrid" type="button" role="tab" aria-selected="true" data-i18n="tab.grid">가로</button>
+<button class="tabBtn" id="tabVertical" type="button" role="tab" aria-selected="false" data-i18n="tab.vertical">세로</button>
+
+            </div>
+          </div>
+
+          <div id="gridBlock" class="presetBlock show">
+            <label for="gridPreset" data-i18n="label.gridPreset">이미지 개수</label>
+            <select id="gridPreset">
+              <option value="1x1">1×1 (1 Image)</option>
+              <option value="2x2">2×2 (4 Image)</option>
+              <option value="3x2">3×2 (6 Image)</option>
+              <option value="3x3" selected>3×3 (9 Image)</option>
+            </select>
+          </div>
+
+          <div id="verticalBlock" class="presetBlock">
+            <label for="verticalPreset">이미지 개수</label>
+            <select id="verticalPreset">
+              <option value="1">1 Image (1×1)</option>
+              <option value="2">2 Image (1×2)</option>
+              <option value="3">3 Image (1×3)</option>
+              <option value="4" selected>4 Image (1×4)</option>
+            </select>
+          </div>
+        </div>
+
+       <!-- OPTIONS -->
+<div>
+  <label for="productType" data-i18n="label.productType">제품 카테고리</label>
+  <select id="productType">
+    <option value="" data-i18n-option="opt.product.auto">자동</option>
+    <option value="electronics" data-i18n-option="opt.product.electronics">전자제품</option>
+    <option value="beauty" data-i18n-option="opt.product.beauty">뷰티</option>
+    <option value="beverage" data-i18n-option="opt.product.beverage">음료</option>
+    <option value="food" data-i18n-option="opt.product.food">식품</option>
+    <option value="home_living" data-i18n-option="opt.product.home_living">리빙</option>
+    <option value="fashion" data-i18n-option="opt.product.fashion">액세서리</option>
+    <option value="luxury_object" data-i18n-option="opt.product.luxury_object">보석/향수</option>
+  </select>
+</div>
+
+<div>
+  <label for="humanUsage" data-i18n="label.humanUsage">사람이 사용 중인 장면</label>
+  <select id="humanUsage">
+    <option value="" data-i18n-option="opt.human.no">아니오(제품 단독)</option>
+    <option value="use" data-i18n-option="opt.human.yes">예(사용 장면)</option>
+  </select>
+</div>
+
+<div>
+  <label for="visualStyle" data-i18n="label.visualStyle">비주얼 스타일</label>
+  <select id="visualStyle">
+    <option value="" data-i18n-option="opt.style.default">기본</option>
+    <option value="luxury_editorial" data-i18n-option="opt.style.luxury_editorial">럭셔리</option>
+    <option value="minimal_museum" data-i18n-option="opt.style.minimal_museum">미니멀 뮤지엄</option>
+    <option value="futuristic_tech" data-i18n-option="opt.style.futuristic_tech">테크</option>
+    <option value="organic_sensory" data-i18n-option="opt.style.organic_sensory">오가닉 센서리</option>
+    <option value="dark_premium" data-i18n-option="opt.style.dark_premium">다크 프리미엄</option>
+    <option value="high_key_clean" data-i18n-option="opt.style.high_key_clean">하이키 클린</option>
+    <option value="monochrome_graphic" data-i18n-option="opt.style.monochrome_graphic">모노크롬</option>
+    <option value="brutalist_lux" data-i18n-option="opt.style.brutalist_lux">브루탈리스트 럭셔리</option>
+    <option value="neo_pop_premium" data-i18n-option="opt.style.neo_pop_premium">네온</option>
+    <option value="cinematic_film" data-i18n-option="opt.style.cinematic_film">시네마틱</option>
+    <option value="glass_light" data-i18n-option="opt.style.glass_light">글라스</option>
+    <option value="liquid_sculpture" data-i18n-option="opt.style.liquid_sculpture">리퀴드</option>
+    <option value="macro_lab" data-i18n-option="opt.style.macro_lab">디테일</option>
+    <option value="gulliver_mini_workers" data-i18n-option="opt.style.gulliver_mini_workers">디오라마</option>
+    <option value="fashion_editorial" data-i18n-option="opt.style.fashion_editorial">룩북</option>
+    <option value="sports_energy_clean" data-i18n-option="opt.style.sports_energy_clean">역동적인</option>
+    <option value="fantasy_surreal" data-i18n-option="opt.style.fantasy_surreal">판타지</option>
+    <option value="gold" data-i18n-option="opt.style.gold">호화</option>
+  </select>
+</div>
+
+<div style="flex:1;min-width:240px">
+  <label for="custom" data-i18n="label.custom">추가지시 (선택)</label>
+  <input id="custom"
+         data-i18n-placeholder="ph.custom"
+         placeholder="e.g., keep label 100% readable, premium haze, mouth-only crop" />
+</div>
+
+<div style="flex:1;min-width:240px">
+  <label for="refImage" data-i18n="label.refImage">Reference Image</label>
+  <input id="refImage" type="file" accept="image/*" />
+</div>
+
+<div>
+  <label>&nbsp;</label>
+  <button class="primary" id="generate" type="button" style="min-width:240px" data-i18n="btn.generate">Generate images</button>
+</div>
+
+
+      <div class="copyBar">
+        <button class="copyBig primary" id="copy" type="button">
+                    Copy prompt
+        </button>
+      </div>
+
+      <div id="results" style="display:none">
+        <div class="heroStatus" style="margin-top:12px">
+          <span id="genStatus">Generating…</span>
+          <span id="genMeta"></span>
+        </div>
+        <div id="resultGrid" class="resultGrid" aria-label="Generated images"></div>
+      </div>
+
+      <textarea id="hiddenOut" aria-hidden="true"></textarea>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">복사됨</div>
+
+  <div id="fallback" class="overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="수동 복사">
+      <div class="modalHead">
+        <div class="modalTitle">브라우저가 자동 복사를 막았어요. 아래 내용을 선택(Ctrl/Cmd+A) 후 복사(Ctrl/Cmd+C)하세요.</div>
+        <button class="modalBtn" id="closeFallback" type="button">닫기</button>
+      </div>
+      <textarea id="fallbackText" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* =========================================================
+     ✅ CONFIG
+  ========================================================== */
+  const CONFIG = {
+    PROJECT: {
+      name: "Grid_Campaign_Premium_Product_Photography",
+      version: "3.6 (Merged: Frame Picker + Rich JSON)",
+      direction_label: "Jason-Style High-End Commercial Marketing"
+    },
+    REF_IMAGE_ID: "uploaded_product_01",
+
+    HERO_IMAGES: [
+      "./banner.svg"
+      // "./banner2.png",
+      // "./banner3.png"
+    ],
+
+    GRID_PRESETS: {
+      "1x1": { cols:1, rows:1 },
+      "2x2": { cols:2, rows:2 },
+      "3x2": { cols:3, rows:2 },
+      "3x3": { cols:3, rows:3 }
+    },
+
+    VERTICAL_PRESETS: {
+      "1": { cols:1, rows:1, count:1 },
+      "2": { cols:1, rows:2, count:2 },
+      "3": { cols:1, rows:3, count:3 },
+      "4": { cols:1, rows:4, count:4 }
+    },
+
+    ASPECT: {
+      GRID: "3:4",
+      VERTICAL: "9:16"
+    }
+  };
+
+  /* =========================================================
+     ✅ UTILS
+  ========================================================== */
+  function uniq(arr){ return Array.from(new Set((arr||[]).filter(Boolean))); }
+  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+  function countTrue(bools){ return (bools||[]).reduce((s,v)=>s+(v?1:0),0); }
+  function getSelectedIndices(selectedFrames){
+    const idx = [];
+    for (let i=0;i<selectedFrames.length;i++) if (selectedFrames[i]) idx.push(i);
+    return idx;
+  }
+  function ensureExactlyNSelected(selectedFrames, n){
+    n = clamp(n, 1, 9);
+    const out = selectedFrames.slice(0,9);
+    while (out.length < 9) out.push(false);
+
+    while (countTrue(out) > n){
+      for (let i=8;i>=0;i--){
+        if (out[i]) { out[i]=false; break; }
+      }
+    }
+    while (countTrue(out) < n){
+      for (let i=0;i<9;i++){
+        if (!out[i]) { out[i]=true; break; }
+      }
+    }
+    return out;
+  }
+
+/* =========================================================
+     ✅ 번역
+  ========================================================== */
+  const I18N = {
+  kr: {
+    "h1.title": "프리미엄 제품샷 생성기",
+    "label.outputPreset": "출력 프리셋",
+    "tab.grid": "가로",
+    "tab.vertical": "세로",
+    "label.gridPreset": "출력 그리드(이미지 개수)",
+    "opt.grid.1x1": "1×1 (1장)",
+    "opt.grid.2x2": "2×2 (4장)",
+    "opt.grid.3x2": "3×2 (6장)",
+    "opt.grid.3x3": "3×3 (9장)",
+    "label.productType": "제품 카테고리",
+"opt.product.auto": "자동",
+"opt.product.electronics": "전자제품",
+"opt.product.beauty": "뷰티",
+"opt.product.beverage": "음료",
+"opt.product.food": "식품",
+"opt.product.home_living": "리빙",
+"opt.product.fashion": "액세서리",
+"opt.product.luxury_object": "보석/향수",
+
+"label.humanUsage": "사람이 사용 중인 장면",
+"opt.human.no": "아니오(제품 단독)",
+"opt.human.yes": "예(사용 장면)",
+
+"label.visualStyle": "비주얼 스타일",
+"opt.style.default": "기본",
+"opt.style.luxury_editorial": "럭셔리",
+"opt.style.minimal_museum": "미니멀 뮤지엄",
+"opt.style.futuristic_tech": "테크",
+"opt.style.organic_sensory": "오가닉 센서리",
+"opt.style.dark_premium": "다크 프리미엄",
+"opt.style.high_key_clean": "하이키 클린",
+"opt.style.monochrome_graphic": "모노크롬",
+"opt.style.brutalist_lux": "브루탈리스트 럭셔리",
+"opt.style.neo_pop_premium": "네온",
+"opt.style.cinematic_film": "시네마틱",
+"opt.style.glass_light": "글라스",
+"opt.style.liquid_sculpture": "리퀴드",
+"opt.style.macro_lab": "디테일",
+"opt.style.gulliver_mini_workers": "디오라마",
+"opt.style.fashion_editorial": "룩북",
+"opt.style.sports_energy_clean": "역동적인",
+"opt.style.fantasy_surreal": "판타지",
+"opt.style.gold": "호화",
+
+"label.custom": "추가지시 (선택)",
+"ph.custom": "e.g., keep label 100% readable, premium haze, mouth-only crop",
+"label.refImage": "레퍼런스 이미지",
+"btn.generate": "이미지 생성"
+    
+  },
+  en: {
+  
+    "h1.title": "Premium Product Shot Generator",
+    "label.outputPreset": "Output Preset",
+    "tab.grid": "Horizontal",
+    "tab.vertical": "Vertical",
+    "label.gridPreset": "Grid Output (Image Count)",
+    "opt.grid.1x1": "1×1 (1 image)",
+    "opt.grid.2x2": "2×2 (4 images)",
+    "opt.grid.3x2": "3×2 (6 images)",
+    "opt.grid.3x3": "3×3 (9 images)",
+    "label.productType": "Product Category",
+"opt.product.auto": "Auto",
+"opt.product.electronics": "Electronics",
+"opt.product.beauty": "Beauty",
+"opt.product.beverage": "Beverage",
+"opt.product.food": "Food",
+"opt.product.home_living": "Home & Living",
+"opt.product.fashion": "Accessories",
+"opt.product.luxury_object": "Luxury (Jewelry/Perfume)",
+
+"label.humanUsage": "Human Usage Scene",
+"opt.human.no": "No (Product only)",
+"opt.human.yes": "Yes (In use)",
+
+"label.visualStyle": "Visual Style",
+"opt.style.default": "Default",
+"opt.style.luxury_editorial": "Luxury",
+"opt.style.minimal_museum": "Minimal Museum",
+"opt.style.futuristic_tech": "Tech",
+"opt.style.organic_sensory": "Organic Sensory",
+"opt.style.dark_premium": "Dark Premium",
+"opt.style.high_key_clean": "High-Key Clean",
+"opt.style.monochrome_graphic": "Monochrome",
+"opt.style.brutalist_lux": "Brutalist Luxury",
+"opt.style.neo_pop_premium": "Neon Pop",
+"opt.style.cinematic_film": "Cinematic",
+"opt.style.glass_light": "Glass & Light",
+"opt.style.liquid_sculpture": "Liquid Sculpture",
+"opt.style.macro_lab": "Detail (Macro Lab)",
+"opt.style.gulliver_mini_workers": "Diorama",
+"opt.style.fashion_editorial": "Lookbook",
+"opt.style.sports_energy_clean": "Dynamic",
+"opt.style.fantasy_surreal": "Fantasy (Surreal)",
+"opt.style.gold": "Opulent Gold",
+
+"label.custom": "Additional Notes (Optional)",
+"ph.custom": "e.g., keep label 100% readable, premium haze, mouth-only crop",
+"label.refImage": "Reference Image",
+"btn.generate": "Generate images"
+
+  }
+};
+
+function t(key){
+  return (I18N[state.lang] && I18N[state.lang][key]) || key;
+}
+
+function applyLang(lang){
+  state.lang = (lang === 'en') ? 'en' : 'kr';
+  document.documentElement.lang = (state.lang === 'kr') ? 'ko' : 'en';
+
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{
+    el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+  });
+
+  document.querySelectorAll('option[data-i18n-option]').forEach(opt=>{
+    opt.textContent = t(opt.getAttribute('data-i18n-option'));
+  });
+}
+
+  
+  
+  
+  /* =========================================================
+     ✅ 9 FRAME TEMPLATES (고정 + template_id 유지)
+     - product type 적용에서 template_id를 기준으로 frame3/8 가이드를 넣기 위해
+       아래 id를 유지하는게 핵심
+  ========================================================== */
+  const FRAME_TEMPLATES = [
+    { id:"hero_still_life", title:"Iconic Hero Still Life", concept:"Bold, confident product presentation with dramatic composition", execution:[
+      "Center-framed product on seamless background",
+      "Strong directional key light from 45° angle",
+      "Deep shadows for depth and dimension",
+      "Negative space emphasizing product authority",
+      "Ultra-sharp focus, every detail visible",
+      "Color grading: rich, saturated, premium feel"
+    ]},
+    { id:"extreme_macro", title:"Extreme Macro Detail", concept:"Surface texture and material craftsmanship", execution:[
+      "Hyper-close-up on product surface/label/texture",
+      "Shallow depth of field, bokeh background",
+      "Reveal material quality: glass reflection, paper fiber, metal grain",
+      "Macro lens precision",
+      "Highlight brand typography or unique surface details",
+      "Clinical sharpness in focused area"
+    ]},
+    { id:"dynamic_interaction", title:"Dynamic Liquid/Particle Interaction", concept:"Product surrounded by motion and energy", execution:[
+      "Liquid splash, powder burst, or particle cloud around product",
+      "Product remains perfectly still and centered",
+      "Frozen motion capture (high-speed photography aesthetic)",
+      "Liquid/particles complement product color palette",
+      "Controlled chaos: dynamic yet clean",
+      "Product untouched, pristine"
+    ]},
+    { id:"minimal_sculptural", title:"Minimal Sculptural Arrangement", concept:"Abstract forms meeting product design", execution:[
+      "Product placed among geometric shapes (spheres, cubes, cylinders)",
+      "Monochromatic or tonal color scheme",
+      "Architectural precision in object placement",
+      "Clean lines, perfect symmetry or intentional asymmetry",
+      "Matte and glossy surface interplay",
+      "Museum-quality lighting"
+    ]},
+    { id:"floating_elements", title:"Floating Elements Composition", concept:"Weightlessness, innovation, future-forward", execution:[
+      "Product appears to levitate",
+      "Supporting elements suspended mid-air (ribbons/fabrics/petals/components as abstract cues)",
+      "Invisible support wires aesthetic",
+      "Airy, light-filled environment",
+      "Soft shadows suggesting gentle elevation",
+      "Ethereal yet grounded in realism"
+    ]},
+    { id:"sensory_closeup", title:"Sensory Close-Up", concept:"Tactile invitation, almost touchable realism", execution:[
+      "Tight crop emphasizing product shape and form",
+      "Lighting that reveals three-dimensionality",
+      "Focus on how light plays across the surface",
+      "Viewer feels texture through the image",
+      "Intimate perspective",
+      "Warm, inviting atmosphere"
+    ]},
+    { id:"precision_feature_study", title:"Precision Detail Feature Study", concept:"Premium micro-details and feature craftsmanship (not just texture)", execution:[
+      "Medium-macro close-up that still shows the product’s form (not an abstract texture-only crop).",
+      "Focus on a signature feature: edge bevel, cap mechanism, nozzle, embossing, seam/stitch, button/knurl, hinge, or material junction.",
+      "Raking side light to reveal precision; controlled specular highlights.",
+      "Focus-stacking look (sharp across the key feature) while background falls to soft bokeh.",
+      "Show fit-and-finish; zero dust, zero fingerprints.",
+      "Keep branding accurate and legible where visible; never crop in a way that changes perceived logo/typography."
+    ]},
+    { id:"ingredient_abstraction", title:"Ingredient/Component Abstraction", concept:"Symbolic representation, not literal", execution:[
+      "Build a symbolic, non-literal abstraction of the product’s essence (component/ingredient vibe, not a literal pile).",
+      "Use refined material metaphors: textures, silhouettes, micro-forms, geometric cues.",
+      "Keep the product as the hero; abstraction supports it without competing.",
+      "Commercial clarity: premium, clean, immediately readable as high-end advertising.",
+      "No gimmicks, no clutter, no readable text; avoid kitschy literal props.",
+      "Maintain consistent studio-grade lighting and pristine product integrity."
+    ]},
+    { id:"surreal_fusion", title:"Surreal Elegant Fusion", concept:"Reality meets imagination, unexpected yet harmonious", execution:[
+      "Product in impossible but beautiful scenario",
+      "Floating in cloud-like softness, or reflective infinity space",
+      "Dreamlike distortion in environment only (never distort product)",
+      "Product remains photographically accurate",
+      "Surrealism in setting, realism in product",
+      "High fashion editorial meets fine art"
+    ]}
+  ];
+
+  /* =========================================================
+     ✅ PRODUCT TYPES (세밀 버전: global + frame3 + frame8)
+  ========================================================== */
+  const PRODUCT_TYPES = {
+    "": { name:"Auto/General", global:[
+      "Choose category-appropriate interactions that never alter the product.",
+      "Avoid literal ingredients unless clearly implied by the product itself."
+    ], frame3:[
+      "Use particles or a subtle fluid ribbon as an abstract energy accent.",
+      "Keep effects behind/beside the product; label remains readable."
+    ], frame8:[
+      "Use symbolic material cues that suggest components/essence (non-literal).",
+      "Keep it refined, minimal, and commercially clear."
+    ]},
+    electronics:{ name:"Electronics / Tech", global:[
+      "Tech cues must come from lighting, precision surfaces, and abstract geometry—not busy UI graphics.",
+      "No readable UI or circuitry text."
+    ], frame3:[
+      "Use controlled micro-particles, ionized mist, or clean light streaks (environment only).",
+      "Avoid messy liquid; prefer precision energy effects."
+    ], frame8:[
+      "Abstract components: prismatic glass, anodized metal fragments, micro-lens bokeh, clean electromagnetic lines (non-text).",
+      "Symbolize performance/precision without literal parts."
+    ]},
+    beauty:{ name:"Beauty / Cosmetic", global:[
+      "Sensory softness and tactile finish are key; keep it premium and clean.",
+      "No rendered claims as text."
+    ], frame3:[
+      "Use silk-like powder bloom, fine mist, pearlescent micro-particles, or viscous glossy gel arcs.",
+      "Controlled chaos; keep packaging pristine."
+    ], frame8:[
+      "Abstract essence: mineral textures, botanical silhouettes, creamy swirls, translucent petals (symbolic, not literal).",
+      "Commercial clarity with refined artistry."
+    ]},
+    beverage:{ name:"Beverage", global:[
+      "Emphasize coldness, freshness, and clarity; keep label readable.",
+      "Condensation/ice cues must look physically correct."
+    ], frame3:[
+      "Use sculptural liquid splash arcs, micro-droplets, and ice crystals framing the product.",
+      "High-speed frozen motion aesthetic; no label occlusion."
+    ], frame8:[
+      "Abstract components: ice formations, botanical silhouettes, carbonation bubbles, liquid droplets (symbolic).",
+      "No literal fruit piles unless the product explicitly implies it."
+    ]},
+    food:{ name:"Food / Gourmet", global:[
+      "Keep it appetizing but still luxury editorial; avoid messy crumbs unless controlled.",
+      "No readable menu text or overlays."
+    ], frame3:[
+      "Use fine spice/powder burst, steam-like haze, or crisp particle motion (controlled).",
+      "If liquid is used, keep it minimal and sculptural."
+    ], frame8:[
+      "Abstract essence: refined textures (salt crystals, cocoa dust, grain patterns) in geometric composition, not literal piles.",
+      "Symbolic, minimal, premium."
+    ]},
+    home_living:{ name:"Home & Living", global:[
+      "Emphasize material honesty (wood/ceramic/textile cues) and calm premium atmosphere.",
+      "Keep environment uncluttered and gallery-like."
+    ], frame3:[
+      "Use gentle dust motes, clean fabric ribbon motion, or soft particles—subtle, not energetic.",
+      "Maintain serene, controlled composition."
+    ], frame8:[
+      "Abstract components: textile weaves, ceramic glaze textures, soft natural shapes (non-literal).",
+      "Suggest comfort and quality through material cues."
+    ]},
+    fashion:{ name:"Fashion / Accessories", global:[
+      "Editorial fashion sensibility; shape, silhouette, and light are the hero.",
+      "Avoid any readable magazine text or extra logos."
+    ], frame3:[
+      "Use flowing fabric-like motion, light ribbons, or minimal particles that feel runway/editorial.",
+      "Keep it elegant and restrained."
+    ], frame8:[
+      "Abstract components: leather grain, metal hardware reflections, textile fibers, gemstone-like bokeh (symbolic).",
+      "Non-obvious, high-fashion refinement."
+    ]},
+    luxury_object:{ name:"Luxury Object", global:[
+      "Museum-grade restraint: precious materials, pristine reflections, controlled sparkle.",
+      "No gaudy glints; highlight craft and rarity."
+    ], frame3:[
+      "Use subtle luminous dust, refined micro-sparkle, or elegant haze—not chaotic splashes.",
+      "Keep it premium and quiet."
+    ], frame8:[
+      "Abstract essence: gemstone refractions, brushed metal micro-texture, incense-like wisps (symbolic).",
+      "Fine-art energy with commercial clarity."
+    ]}
+  };
+
+  /* =========================================================
+     ✅ VISUAL PRESETS (요약: 기존 그대로)
+  ========================================================== */
+  const VISUAL_PRESETS = {
+    gulliver_mini_workers: {
+      name: "Gulliver Miniature Workers (Diorama)",
+      add: [
+        "gulliver-scale diorama: the product is a giant monument, tiny workers interact with it",
+        "miniature people (tiny engineers/riggers/technicians) working around the product",
+        "tiny ropes, pulleys, scaffolding, ladders, miniature cranes (props only)",
+        "micro-scale construction/maintenance scene: polishing, measuring, inspecting, securing",
+        "macro photography of a miniature diorama, realistic scale cues",
+        "tilt-shift miniature look (subtle), shallow DOF with controlled focus plane",
+        "premium high-end advertising finish (clean, intentional, not messy)",
+        "product remains 100% photorealistic and undistorted",
+        "do not cover label/branding; keep it readable where visible",
+        "no readable text anywhere in the scene"
+      ],
+      notes: [
+        "Gulliver rule: tiny workers + giant product, but still premium and clean.",
+        "Workers/props must never block or damage branding/label."
+      ]
+    },
+    
+  
+     gold: {
+  name: "Opulent Gold (Indulgent Luxury)",
+  add: [
+    // ✅ Identity lock (reference-driven)
+    "Use the attached reference photo as the exact product identity lock.",
+    "Interpret and replicate the product from the reference precisely: shape, proportions, silhouette, materials, finishes, colors, logos/decals, knobs/switches, hardware placement.",
+    "Do not redesign, do not change the model, and do not introduce extra parts.",
+
+    // ✅ Core luxury look (your prompt)
+    "indulgent luxury product photography, opulent richness, wealth aesthetic",
+    "bathed in warm golden light (honey-toned highlights)",
+    "warm highlights and deep shadows, cinematic contrast",
+    "premium studio lighting, controlled reflections, high-end commercial luxury advertising look",
+    "surrounded by gold leaf flakes and fine gold dust micro-particles (subtle, premium, not chaotic)",
+    "honey-toned reflective surfaces / glossy dark surfaces as environment only",
+
+    // ✅ Composition / camera
+    "hero product centered, clean separation from background, crisp edges",
+    "shallow depth of field, ultra-detailed photoreal, tack-sharp product focus",
+    "background stays elegant and minimal; gold elements frame the product without clutter",
+
+    // ✅ Hard constraints
+    "no text, no watermark, no border, no frame, no bars",
+    "full-bleed image: no empty edges; do not add padding or letterboxing",
+    "gold effects must NOT cover label/branding; keep typography readable where visible",
+    "never recolor or alter the product; gold tone applies to lighting/environment only"
+  ],
+  notes: [
+    "Gold style = lighting + environment + micro-particles. Product identity stays 100% locked to reference.",
+    "Keep it 'rich and controlled' (no cheap glitter, no party confetti)."
+  ]
+},
+
+    
+   
+
+    neo_pop_premium: {
+      name: "Neo-Pop (Pop Star / Stage)",
+      add: [
+        "pop star stage vibe (premium pop aesthetic)",
+        "bold pop color blocking (background/set only)",
+        "neon accent lighting, clean rim lights (controlled, not chaotic)",
+        "graphic shapes: circles, stripes, geometric cutouts (set design only)",
+        "glossy acrylic / chrome props (background only), modern pop set",
+        "high-saturation accents with strict restraint (2–3 accent colors max)",
+        "clean gradients, crisp edges, studio-grade polish",
+        "sparkle micro-particles / confetti hints (very subtle, premium)",
+        "product remains photorealistic, pristine, tack-sharp"
+      ],
+      notes: [
+        "Accent colors apply to environment only; NEVER recolor the product."
+      ]
+    },
+
+    luxury_editorial: {
+      name: "Luxury Editorial (Gala Awards)",
+      add: [
+        "ultra-premium luxury editorial advertising",
+        "award gala atmosphere (high-end ceremony vibe)",
+        "black & gold stage palette (environment only)",
+        "cinematic spotlight beams, controlled volumetric haze",
+        "gold confetti micro-particles / stardust dust (subtle, premium)",
+        "luxury bokeh light wall (background only)",
+        "museum-grade product realism: pristine, perfect reflections"
+      ],
+      notes: [
+        "Gala mood: elegant ceremony lighting + subtle gold dust, NOT party chaos."
+      ]
+    },
+
+    minimal_museum: {
+      name: "Miniature Museum (Diorama)",
+      add: [
+        "miniature museum diorama set (scale model exhibition space)",
+        "macro photography of a miniature diorama (tiny set details visible)",
+        "tilt-shift miniature look (subtle), shallow depth of field with controlled focus plane",
+        "museum-grade minimalism (few elements)",
+        "product remains photorealistic, pristine, and undistorted",
+        "no readable text anywhere in the scene"
+      ],
+      notes: [
+        "Miniature rule: the environment is a scale model museum diorama."
+      ]
+    },
+
+    dark_premium: { name:"Dark Premium", add:["dark premium advertising","low-key studio lighting","controlled rim light","deep gradients"], notes:["Label must remain readable on dark."] },
+    high_key_clean: { name:"High-Key Clean", add:["high-key bright studio","clean white/ivory backgrounds","soft shadow under product","clinical clarity"], notes:["Avoid blown highlights; keep micro-detail."] },
+    futuristic_tech: { name:"Futuristic Tech", add:["futuristic premium tech advertising","sterile clean studio","precision lighting","high-contrast micro-detail"], notes:["No cyber clutter; premium minimal."] },
+
+    glass_light: {
+      name: "Glass & Light (Clean Tech Ad)",
+      add: [
+        "glass-first environment: transparent glass, crystal, acrylic, and prism slabs (background only)",
+        "clean caustics patterns on the floor/walls (subtle, realistic)",
+        "prismatic light rays, controlled rainbow dispersion (very refined)",
+        "NO refraction passing through the product silhouette",
+        "product must remain perfectly undistorted and photorealistic"
+      ],
+      notes: ["Refraction/glass effects must frame the product, never warp label/typography."]
+    },
+
+    macro_lab: {
+      name: "Macro Lab (Detail-Only)",
+      add: [
+        "precision macro lab vibe",
+        "detail-only macro photography: show only product micro-details, not a full product hero shot",
+        "extreme macro framing of label print, embossing, seam, edge bevel, cap mechanism, nozzle, texture, material junction",
+        "background must be mid-gray to dark-gray neutral gradient (graphite/charcoal), NOT white",
+        "clinical clarity, zero dust, zero fingerprints"
+      ],
+      notes: ["Detail-only rule: tight macro close-ups; avoid wide shots."]
+    },
+
+    monochrome_graphic: {
+      name: "Japanese B&W Cinema (Premium)",
+      add: [
+        "true black-and-white cinematography (no color)",
+        "high-contrast lighting, deep blacks, rich midtones",
+        "subtle 35mm film grain (fine, premium)"
+      ],
+      notes: ["FULL BLACK-AND-WHITE LOOK: the entire image should be monochrome."]
+    },
+
+    brutalist_lux: { name:"Brutalist Luxury", add:["brutalist luxury set design","raw stone/concrete vibe (background only)","hard geometry with soft light"], notes:["Abstract props; keep it clean."] },
+
+    liquid_sculpture: {
+      name:"Liquid Sculpture (Wrap / Orbit)",
+      add:[
+        "sculptural liquid ribbons wrapping around the product (360-degree orbit)",
+        "liquid arcs / rings framing the product from all sides",
+        "never crossing the label/branding",
+        "high-speed splash aesthetic with frozen motion (studio-grade)"
+      ],
+      notes:["Never cover label/branding; keep product readable and undistorted."]
+    },
+
+    organic_sensory: {
+      name:"Organic Sensory (Tactile Luxury)",
+      add:[
+        "organic sensory luxury advertising",
+        "soft window daylight in studio (diffused natural light)",
+        "natural materials as set design only: linen fabric, matte ceramic, warm wood grain, soft stone",
+        "calm premium mood, spa/boutique sensibility"
+      ],
+      notes:["Keep it minimal and premium; product identity must never change."]
+    },
+
+    fashion_editorial: { name:"Fashion Editorial", add:["fashion editorial lighting","lookbook polish","soft contrast"], notes:["Editorial taste; minimal but expressive."] },
+
+    sports_energy_clean: {
+      name:"Sports Energy Clean (High-Speed Action Cam)",
+      add:[
+        "high-speed sports commercial photography",
+        "fast-shutter action capture (crisp freeze + controlled motion accents)",
+        "clean motion streaks made of light (environment only, premium)",
+        "product remains photorealistic, pristine, and undistorted"
+      ],
+      notes:["Energy effects are controlled and clean (no chaotic dust clouds)."]
+    },
+
+    cinematic_film: { name:"Cinematic Film", add:["cinematic filmic lighting","subtle film grain","controlled halation"], notes:["Filmic but still billboard-clean."] },
+
+    fantasy_surreal: {
+      name:"Fantasy (Surreal)",
+      add:[
+        "fantasy surreal high-end advertising",
+        "floating architecture / impossible geometry (background only)",
+        "premium VFX particles: iridescent dust, aurora-like ribbons (environment only)",
+        "surreal but elegant, never kitschy"
+      ],
+      notes:[
+        "Surrealism is allowed ONLY in the environment; the product must remain perfectly realistic and undistorted."
+      ]
+    }
+  };
+
+  /* =========================================================
+     ✅ OUTPUT PRESET
+  ========================================================== */
+  function resolveOutputPreset(mode, gridKey, verticalKey){
+    if (mode === 'vertical'){
+      const v = CONFIG.VERTICAL_PRESETS[verticalKey] || CONFIG.VERTICAL_PRESETS["4"];
+      return {
+        mode: "vertical",
+        cols: v.cols,
+        rows: v.rows,
+        count: v.count,
+        aspect_ratio_per_frame: CONFIG.ASPECT.VERTICAL,
+        preset_label: v.count + "_vertical_images"
+      };
+    }
+    const g = CONFIG.GRID_PRESETS[gridKey] || CONFIG.GRID_PRESETS["3x3"];
+    return {
+      mode: "grid",
+      cols: g.cols,
+      rows: g.rows,
+      count: g.cols * g.rows,
+      aspect_ratio_per_frame: CONFIG.ASPECT.GRID,
+      preset_label: gridKey
+    };
+  }
+
+  function buildSelection(outputPreset, gridKey, verticalKey){
+    return {
+      output_mode: { selected: outputPreset.mode === "vertical" ? "Vertical" : "Grid", enforce:true },
+      grid_preset: { selected: gridKey || "3x3" },
+      vertical_preset: { selected: (verticalKey||"4")+"_images" },
+      visual_style: { selected: "Default", enforce:false, notes:[] },
+      human_usage: { selected: "No", enforce:false, notes:[] }
+    };
+  }
+
+  /* =========================================================
+     ✅ FRAMES: selected indices -> output frames
+  ========================================================== */
+  function generateFramesBySelection(selectedIndices){
+    const frames = [];
+    for (let i=0;i<selectedIndices.length;i++){
+      const t = FRAME_TEMPLATES[selectedIndices[i]];
+      frames.push({
+        frame: i+1,
+        template_id: t.id,
+        title: t.title,
+        concept: t.concept,
+        execution: (t.execution||[]).slice()
+      });
+    }
+    return frames;
+  }
+
+  /* =========================================================
+     ✅ PROMPT JSON BUILDER (2번째 코드의 "세밀함" 채택)
+  ========================================================== */
+  function basePrompt(outputPreset, gridKey, verticalKey, frames){
+    const count = outputPreset.count;
+
+    return {
+      project:{
+        name: CONFIG.PROJECT.name,
+        version: CONFIG.PROJECT.version,
+        direction_label: CONFIG.PROJECT.direction_label
+      },
+
+      output:{
+        format: "image_grid",
+        mode: outputPreset.mode,
+        deliverable: count + "_images",
+        grid:{columns:outputPreset.cols,rows:outputPreset.rows},
+        aspect_ratio_per_frame: outputPreset.aspect_ratio_per_frame,
+        resolution_hint:"4K",
+        layout_preset: outputPreset.preset_label,
+        total_images: count
+      },
+
+      inputs:{
+        reference_images:[{
+          id: CONFIG.REF_IMAGE_ID,
+          use_as:"hero_product_identity_lock",
+          lock_rules:[
+            "Preserve product shape, proportions, label, typography, color, and branding exactly",
+            "No distortion, warping, deformation, redesign, or substitutions",
+            "Label text legible where visible; color-matched brand colors",
+            "Product condition: pristine, new, perfect",
+            "No text overlays/captions/watermarks in the generated images"
+          ]
+        }]
+      },
+
+      product_context:{category:"Auto/General",category_notes:[]},
+
+      campaign_direction:{
+        jason_style_direction:[
+          "Clean. Controlled. Intentional.",
+          "Every element serves the product.",
+          "No decoration for decoration's sake.",
+          "Precision in execution.",
+          "Emotion through restraint.",
+          "Premium through simplicity.",
+          "Cinematic without being theatrical.",
+          "Commercial but never compromising artistry."
+        ],
+        universal_technical_specs:{
+          product_integrity:["100% accurate shape, proportion, branding","No distortion, warping, or redesign","Label text legible where visible","Brand colors precise (color-matched)","Pristine condition"],
+          lighting:["Soft, controlled studio setup","Balanced key, fill, rim","Subtle specular highlights","Natural shadow falloff","No harsh or unnatural lighting"],
+          focus_and_detail:["Tack-sharp on product (except intentional bokeh areas)","High-resolution rendering","Fine detail visible: texture, print, surface quality","Professional depth-of-field control"],
+          composition:["Clean separation product/background","Clear visual hierarchy","Intentional negative space","Balanced frame weight"],
+          post_production:["HDR look","Subtle color grading","Minimal but precise retouching","Editorial polish without over-processing","Medium-format camera aesthetic"],
+          aesthetic:["Luxury brand campaign quality","Sophisticated, modern, timeless","Aspirational yet authentic"]
+        },
+        brand_alignment:[
+          "Every frame supports premium positioning",
+          "Visual consistency maintains recognition",
+          "Variety demonstrates versatility",
+          "High-investment, professionally produced feel"
+        ]
+      },
+
+      frames: frames,
+
+      constraints:{
+        no_visible_text:"strict",
+        product_integrity:"absolute",
+        no_borders_or_bars:{
+          enabled:true,
+          rules:[
+            "NO borders/frames/outlines/mattes of any kind (no white or black edges).",
+            "NO letterboxing or pillarboxing bars.",
+            "Image must be full-bleed: content extends to all canvas edges.",
+            "Do not add padding/margins; do not place the image inside a frame.",
+            "If aspect ratio mismatch occurs, extend/outpaint the background to fill edges (no bars)."
+          ]
+        }
+      },
+
+      negative_prompt:[
+        "distorted product","incorrect logo","wrong typography","misspelled label text",
+        "extra text overlays","watermark","low resolution","blurry","overexposed highlights",
+        "dirty/noisy background","warped perspective","deformed container","unreadable branding",
+        "cheap stock-photo look","any readable text",
+
+        "letterbox","pillarbox","bars","black bars","white bars","cinematic bars",
+        "border","frame","white border","black border","outline border","stroke border","matte border",
+        "picture frame","edge frame","thin border","thick border",
+        "margin","padding","canvas edge","blank edge","empty edge","solid color edge","white edge","black edge",
+        "vignette border"
+      ],
+
+      selection: buildSelection(outputPreset, gridKey, verticalKey)
+    };
+  }
+
+  /* =========================================================
+     ✅ MODIFIERS: VERTICAL ENFORCEMENT
+  ========================================================== */
+  function applyVerticalEnforcement(p){
+    if (!p.output || p.output.mode !== "vertical") return p;
+
+    p.output.orientation = "portrait";
+    p.output.aspect_ratio_per_frame = CONFIG.ASPECT.VERTICAL;
+    p.output.aspect_ratio_lock = "strict";
+
+    p.constraints = p.constraints || {};
+    p.constraints.enforce_portrait_output = {
+      enabled:true,
+      target_aspect_ratio: CONFIG.ASPECT.VERTICAL,
+      rules:[
+        "OUTPUT MUST BE PORTRAIT 9:16. Do not output landscape under any condition.",
+        "If the reference image is landscape, adapt it to portrait via background outpainting/extension or safe cropping.",
+        "Never stretch/squash/warp the product to fit the portrait frame.",
+        "Prefer extending background (outpaint) rather than cropping the product or labels.",
+        "FULL-BLEED REQUIRED: no borders, no bars, no empty edges; outpaint background to fill."
+      ]
+    };
+
+    const ref = p.inputs && p.inputs.reference_images && p.inputs.reference_images[0];
+    if (ref && Array.isArray(ref.lock_rules)){
+      ref.lock_rules = uniq(ref.lock_rules.concat([
+        "VERTICAL MODE: output canvas is portrait 9:16 (strict).",
+        "If reference is landscape, do NOT keep landscape canvas; extend background or safe-crop to portrait 9:16.",
+        "NEVER stretch/squash/warp product to fit portrait.",
+        "Prefer outpainting background top/bottom; keep product centered and undistorted.",
+        "NO BORDERS/BARS/FRAMES/EDGES: full-bleed only; do not add white/black edges."
+      ]));
+    }
+
+    (p.frames || []).forEach(fr=>{
+      fr.execution = uniq((fr.execution||[]).concat([
+        "Portrait composition lock: 9:16 framing.",
+        "Use vertical negative space (top/bottom) for premium layout; product centered, hero scale consistent.",
+        "If needed, extend background vertically (outpainting) rather than changing product shape or cropping branding.",
+        "Full-bleed rule: extend background to the edges; never leave empty/solid-color borders."
+      ]));
+      fr.portrait_mode = true;
+    });
+
+    p.selection = p.selection || {};
+    p.selection.portrait_enforcement = { enabled:true, target:"9:16", method:"outpaint_or_safe_crop", full_bleed:true };
+
+    p.negative_prompt = uniq((p.negative_prompt||[]).concat([
+      "border","frame","white border","black border",
+      "letterbox","pillarbox","black bars","white bars",
+      "padding","margin","blank edge","empty edge","canvas edge"
+    ]));
+
+    return p;
+  }
+
+  /* =========================================================
+     ✅ MODIFIERS: PRODUCT TYPE
+     - 핵심 차이: 3번/8번을 "번호"가 아니라 template_id로 찾아 적용
+  ========================================================== */
+  function applyProductType(p, productKey){
+    const cfg = Object.prototype.hasOwnProperty.call(PRODUCT_TYPES, productKey)
+      ? PRODUCT_TYPES[productKey]
+      : PRODUCT_TYPES[""];
+
+    p.product_context.category = cfg.name;
+    p.product_context.category_notes = (cfg.global||[]).slice();
+
+    p.campaign_direction.brand_alignment = uniq((p.campaign_direction.brand_alignment||[]).concat([
+      "Category guidance applied: " + cfg.name
+    ]));
+
+    // template_id 기반으로 frame3/8 guidance 주입
+    const fDynamic = (p.frames||[]).find(fr => fr.template_id === "dynamic_interaction");
+    if (fDynamic){
+      fDynamic.category_guidance = cfg.name;
+      fDynamic.execution = uniq((fDynamic.execution||[]).concat(cfg.frame3||[]));
+    }
+
+    const fIngredient = (p.frames||[]).find(fr => fr.template_id === "ingredient_abstraction");
+    if (fIngredient){
+      fIngredient.category_guidance = cfg.name;
+      fIngredient.execution = uniq((fIngredient.execution||[]).concat(cfg.frame8||[]));
+    }
+
+    // 모든 프레임에 레퍼런스 무드 락
+    (p.frames||[]).forEach(fr=>{
+      fr.product_category = cfg.name;
+      fr.execution = uniq((fr.execution||[]).concat([
+        "REFERENCE MOOD LOCK: match the reference image mood, lighting, contrast, and palette; avoid off-palette backgrounds/effects."
+      ]));
+    });
+
+    return p;
+  }
+
+  /* =========================================================
+     ✅ MODIFIERS: VISUAL STYLE
+  ========================================================== */
+  function applySelections(p, visualKey, customLine){
+    p.selection.visual_style = {selected:"Default", enforce:false, notes:[]};
+
+    // style apply
+    if (visualKey){
+      const v = VISUAL_PRESETS[visualKey];
+      if (v){
+        p.selection.visual_style = {
+          selected: v.name,
+          enforce: true,
+          notes: ["STYLE ENFORCEMENT: selected visual style must be followed strictly."].concat(v.notes||[])
+        };
+
+        // 2번째 코드의 "세밀함": campaign_direction 안에 add를 합침
+        p.campaign_direction.jason_style_direction = uniq(
+          (p.campaign_direction.jason_style_direction||[]).concat(v.add||[])
+        );
+
+        // 프레임에도 흔적 남기기(디버그/가독성)
+        (p.frames||[]).forEach(fr=>{
+          fr.visual_style = v.name;
+          fr.visual_style_rule = "Follow selected visual style strictly. Do not alter product identity.";
+        });
+
+        // macro_lab 전용 네거티브 강화
+        if (visualKey === 'macro_lab'){
+          p.negative_prompt = uniq((p.negative_prompt||[]).concat([
+            "white background","pure white backdrop","white seamless","high-key studio",
+            "overexposed background","blown-out background",
+            "wide shot","full product in frame","establishing shot","environment focus","tiny product","busy props"
+          ]));
+        }
+
+        // fantasy_surreal 안전장치
+        if (visualKey === 'fantasy_surreal'){
+          p.constraints = p.constraints || {};
+          p.constraints.surreal_environment_only = {
+            enabled:true,
+            rules:[
+              "Surreal/fantasy elements must be environment/background only.",
+              "No surreal deformation of the product. Product stays 100% photorealistic and accurate.",
+              "Particles/light/geometry may be surreal but must not cover critical branding."
+            ]
+          };
+          p.negative_prompt = uniq((p.negative_prompt||[]).concat([
+            "fantasy creature holding product",
+            "cartoon style","anime style","toy-like plastic look",
+            "product melting","product morphing",
+            "logo warped","typography warped"
+          ]));
+        }
+      }
+    }
+
+    // custom note
+    if (customLine && customLine.trim()){
+      p.constraints = p.constraints || {};
+      p.constraints.custom_note = customLine.trim();
+    } else if (p.constraints && p.constraints.custom_note){
+      delete p.constraints.custom_note;
+    }
+
+    return p;
+  }
+
+  /* =========================================================
+     ✅ MODIFIERS: HUMAN USAGE
+     - 선택된 프레임이 몇 개든 "전 프레임"에 룰 적용 (실패 방지)
+  ========================================================== */
+  function applyHumanUsage(p, humanKey, productKey, customLine){
+    p.selection.human_usage = {selected:"No",enforce:false,notes:[]};
+    if (humanKey !== 'use'){
+      if (p.constraints && p.constraints.human_usage) delete p.constraints.human_usage;
+      (p.frames||[]).forEach(fr=>{ if (fr.human_usage) delete fr.human_usage; });
+      return p;
+    }
+
+    p.selection.human_usage = {
+      selected:"Yes (usage scene)",
+      enforce:true,
+      notes:[
+        "ENFORCEMENT: If usage is enabled, do not show full face.",
+        "Lipstick/food case: mouth-only crop may be used, still no full face."
+      ]
+    };
+
+    const rules = [
+      "Include human interaction/usage context, but NEVER show a full face.",
+      "No identifiable person: no eyes + nose + full face together; avoid portraits.",
+      "Prefer hands/forearms/partial body crops; keep it editorial and premium.",
+      "Human elements must not alter the product; product remains the hero and perfectly accurate."
+    ];
+
+    const wantsLipstick = /lipstick|립스틱/i.test(customLine || "");
+    if (wantsLipstick || productKey === 'beauty'){
+      rules.push("If the product is lipstick: show lips/mouth area only (cropped), NO full face, NO eyes, NO nose.");
+    }
+    if (productKey === 'food'){
+      rules.push("If the product is food: show eating action with mouth/lips only (cropped), NO full face, NO eyes; keep it appetizing and clean.");
+    }
+
+    p.constraints = p.constraints || {};
+    p.constraints.human_usage = { enabled:true, rules };
+
+    (p.frames||[]).forEach(fr=>{
+      fr.human_usage = true;
+      fr.execution = uniq((fr.execution||[]).concat([
+        "Include human interaction crop (hands/partial) with NO full face; keep premium editorial.",
+        "Product stays tack-sharp and dominant; skin/hand is supporting element only."
+      ]));
+    });
+
+    p.negative_prompt = uniq((p.negative_prompt||[]).concat([
+      "full face","portrait","recognizable person","celebrity","eyes",
+      "text on skin","tattoos with readable text"
+    ]));
+
+    return p;
+  }
+
+  /* =========================================================
+     ✅ DOM / STATE
+  ========================================================== */
+  const DOM = {
+  langKR: document.getElementById('langKR'),
+langEN: document.getElementById('langEN'),
+
+    tabGrid: document.getElementById('tabGrid'),
+    tabVertical: document.getElementById('tabVertical'),
+    gridBlock: document.getElementById('gridBlock'),
+    verticalBlock: document.getElementById('verticalBlock'),
+
+    gridPreset: document.getElementById('gridPreset'),
+    verticalPreset: document.getElementById('verticalPreset'),
+
+    productType: document.getElementById('productType'),
+    humanUsage: document.getElementById('humanUsage'),
+    visualStyle: document.getElementById('visualStyle'),
+    custom: document.getElementById('custom'),
+
+    refImage: document.getElementById('refImage'),
+    generateBtn: document.getElementById('generate'),
+
+    hiddenOut: document.getElementById('hiddenOut'),
+    toast: document.getElementById('toast'),
+
+    fallback: document.getElementById('fallback'),
+    fallbackText: document.getElementById('fallbackText'),
+    closeFallback: document.getElementById('closeFallback'),
+
+    copyBtn: document.getElementById('copy'),
+
+    results: document.getElementById('results'),
+    genStatus: document.getElementById('genStatus'),
+    genMeta: document.getElementById('genMeta'),
+    resultGrid: document.getElementById('resultGrid'),
+
+    heroImg: document.getElementById('heroImg'),
+    heroPrev: document.getElementById('heroPrev'),
+    heroNext: document.getElementById('heroNext'),
+
+    overlayGrid: document.getElementById('overlayGrid'),
+    selStatus: document.getElementById('selStatus')
+  };
+
+  let state = {
+  lang: 'kr',
+
+    mode: 'grid',
+    selectedFrames: Array(9).fill(true),
+    lastSelectedOrder: [0,1,2,3,4,5,6,7,8],
+
+    heroUrls: (CONFIG.HERO_IMAGES && CONFIG.HERO_IMAGES.length) ? CONFIG.HERO_IMAGES.slice() : ["./banner.svg"],
+    heroIndex: 0,
+
+    toastTimer: null
+  };
+
+  /* =========================================================
+     ✅ HERO CAROUSEL
+  ========================================================== */
+  function setHeroIndex(idx){
+    const n = state.heroUrls.length;
+    if (n <= 0) return;
+    state.heroIndex = (idx % n + n) % n;
+    DOM.heroImg.src = state.heroUrls[state.heroIndex];
+
+    const showArrows = n > 1;
+    DOM.heroPrev.classList.toggle('show', showArrows);
+    DOM.heroNext.classList.toggle('show', showArrows);
+  }
+
+  /* =========================================================
+     ✅ Selection rules
+  ========================================================== */
+  function resolveOutputPresetLocal(){
+    return resolveOutputPreset(state.mode, DOM.gridPreset.value, DOM.verticalPreset.value);
+  }
+  function desiredCount(){
+    const out = resolveOutputPresetLocal();
+    return clamp(out.count, 1, 9);
+  }
+  function syncSelectionToDesired(){
+    const n = desiredCount();
+    if (n === 9){
+      state.selectedFrames = Array(9).fill(true);
+      state.lastSelectedOrder = [0,1,2,3,4,5,6,7,8];
+      return;
+    }
+    state.selectedFrames = ensureExactlyNSelected(state.selectedFrames, n);
+    state.lastSelectedOrder = getSelectedIndices(state.selectedFrames);
+  }
+
+  function toggleFrame(idx){
+    const n = desiredCount();
+    if (n === 9) return; // 9장일 땐 잠금
+
+    idx = clamp(idx, 0, 8);
+    const wasOn = !!state.selectedFrames[idx];
+
+    if (wasOn){
+      state.selectedFrames[idx] = false;
+      state.lastSelectedOrder = state.lastSelectedOrder.filter(x=>x!==idx);
+
+      while (countTrue(state.selectedFrames) < n){
+        for (let i=0;i<9;i++){
+          if (!state.selectedFrames[i]){
+            state.selectedFrames[i] = true;
+            state.lastSelectedOrder.push(i);
+            break;
+          }
+        }
+      }
+      return;
+    }
+
+    state.selectedFrames[idx] = true;
+    state.lastSelectedOrder = state.lastSelectedOrder.filter(x=>x!==idx);
+    state.lastSelectedOrder.push(idx);
+
+    while (countTrue(state.selectedFrames) > n){
+      const oldest = state.lastSelectedOrder.shift();
+      if (oldest === undefined) break;
+      if (oldest === idx) continue;
+      state.selectedFrames[oldest] = false;
+    }
+    state.lastSelectedOrder = state.lastSelectedOrder.filter(i=>state.selectedFrames[i]);
+  }
+
+  function getSelectionIndicesForOutput(){
+    syncSelectionToDesired();
+    const n = desiredCount();
+    // lastSelectedOrder 우선(사용자가 마지막으로 선택한 순서를 유지)
+    const idx = state.lastSelectedOrder.slice(0, n);
+
+    // 혹시 부족하면 앞에서 채움
+    while (idx.length < n){
+      for (let i=0;i<9;i++){
+        if (!idx.includes(i) && state.selectedFrames[i]){
+          idx.push(i);
+          break;
+        }
+      }
+      // 그래도 부족하면 그냥 남은 것 채움
+      if (idx.length < n){
+        for (let i=0;i<9;i++){
+          if (!idx.includes(i)){ idx.push(i); break; }
+        }
+      }
+    }
+    return idx.slice(0, n);
+  }
+
+  /* =========================================================
+     ✅ Render overlay checkboxes
+  ========================================================== */
+  function renderOverlayCheckboxes(){
+    syncSelectionToDesired();
+    const n = desiredCount();
+    const lockedAll = (n === 9);
+
+    DOM.selStatus.textContent = `선택 ${countTrue(state.selectedFrames)}/${n}`;
+
+    if (!DOM.overlayGrid.dataset.built){
+      DOM.overlayGrid.innerHTML = "";
+      for (let i=0;i<9;i++){
+        const lab = document.createElement('label');
+        lab.className = 'cellPick';
+        lab.setAttribute('data-idx', String(i));
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.addEventListener('change', (e)=>{
+          e.preventDefault();
+          toggleFrame(i);
+          renderOverlayCheckboxes();
+          refresh();
+        });
+
+        lab.appendChild(cb);
+        DOM.overlayGrid.appendChild(lab);
+      }
+      DOM.overlayGrid.dataset.built = "1";
+    }
+
+    const labels = DOM.overlayGrid.querySelectorAll('.cellPick');
+    labels.forEach((lab, i)=>{
+      const cb = lab.querySelector('input');
+      cb.checked = !!state.selectedFrames[i];
+      cb.disabled = lockedAll;
+      lab.classList.toggle('locked', lockedAll);
+    });
+  }
+
+  /* =========================================================
+     ✅ Toast / Copy fallback
+  ========================================================== */
+  function showToast(msg){
+    DOM.toast.textContent = msg;
+    DOM.toast.classList.add('show');
+    if (state.toastTimer) clearTimeout(state.toastTimer);
+    state.toastTimer = setTimeout(()=> DOM.toast.classList.remove('show'), 900);
+  }
+
+  function openFallback(text){
+    DOM.fallbackText.value = text;
+    DOM.fallback.classList.add('show');
+    DOM.fallback.setAttribute('aria-hidden','false');
+    setTimeout(()=>{ DOM.fallbackText.focus(); DOM.fallbackText.select(); }, 0);
+  }
+
+  function closeFallback(){
+    DOM.fallback.classList.remove('show');
+    DOM.fallback.setAttribute('aria-hidden','true');
+  }
+
+  async function copyRobust(text){
+    if (navigator.clipboard && window.isSecureContext){
+      try { await navigator.clipboard.writeText(text); return true; } catch(_e){}
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly','');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '0';
+      ta.style.width = '1px';
+      ta.style.height = '1px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch(_e){
+      return false;
+    }
+  }
+
+  async function doCopy(){
+    refresh();
+    const text = DOM.hiddenOut.value || "";
+    const ok = await copyRobust(text);
+    if (ok) showToast('복사됨');
+    else { showToast('수동 복사'); openFallback(text); }
+  }
+
+  function setGenerating(isGenerating, metaText){
+    if (DOM.generateBtn){
+      DOM.generateBtn.disabled = !!isGenerating;
+      if (isGenerating){
+        DOM.generateBtn.textContent = 'Generating…';
+      } else {
+        DOM.generateBtn.textContent = t('btn.generate');
+      }
+    }
+
+    if (DOM.results){
+      DOM.results.style.display = 'block';
+    }
+    if (DOM.genStatus){
+      DOM.genStatus.textContent = isGenerating ? 'Generating…' : '';
+    }
+    if (DOM.genMeta){
+      DOM.genMeta.textContent = metaText || '';
+    }
+  }
+
+  function renderResults(images, outputPreset){
+    if (!DOM.resultGrid || !DOM.results) return;
+
+    DOM.resultGrid.innerHTML = '';
+    if (!images || images.length === 0){
+      DOM.results.style.display = 'none';
+      return;
+    }
+
+    DOM.results.style.display = 'block';
+
+    const cols = (outputPreset && outputPreset.mode === 'grid' && outputPreset.cols) ? outputPreset.cols : 1;
+    DOM.resultGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+    images.forEach((src, idx)=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'resultItem';
+
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.alt = `Generated ${idx+1}`;
+      img.src = src;
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+
+      const left = document.createElement('span');
+      left.textContent = `#${idx+1}`;
+
+      const a = document.createElement('a');
+      a.href = src;
+      a.download = `preview_${String(idx+1).padStart(2,'0')}.png`;
+      a.textContent = 'Download';
+
+      meta.appendChild(left);
+      meta.appendChild(a);
+
+      wrap.appendChild(img);
+      wrap.appendChild(meta);
+      DOM.resultGrid.appendChild(wrap);
+    });
+
+    if (DOM.genStatus){
+      DOM.genStatus.textContent = `Done (${images.length})`;
+    }
+  }
+
+  async function doGenerate(){
+    refresh();
+
+    const file = DOM.refImage && DOM.refImage.files && DOM.refImage.files[0];
+    if (!file){
+      showToast('Upload image');
+      return;
+    }
+
+    const outputPreset = resolveOutputPresetLocal();
+    const selectedIdx = getSelectionIndicesForOutput();
+    const frames = generateFramesBySelection(selectedIdx);
+    const frameIDs = (frames || []).map(f => f.template_id).filter(Boolean);
+
+    const fd = new FormData();
+    fd.append('image', file, file.name || 'reference');
+    fd.append('mode', outputPreset.mode || 'grid');
+    fd.append('grid_preset', DOM.gridPreset.value || '3x3');
+    fd.append('vertical_count', DOM.verticalPreset.value || '4');
+    fd.append('aspect_ratio', outputPreset.aspect_ratio_per_frame || '');
+    fd.append('product_type', DOM.productType.value || '');
+    fd.append('visual_style', DOM.visualStyle.value || '');
+    fd.append('human_usage', (DOM.humanUsage.value === 'use') ? '1' : '0');
+    fd.append('custom', DOM.custom.value || '');
+    fd.append('frame_ids', JSON.stringify(frameIDs));
+
+    setGenerating(true, `${outputPreset.count} images • ${outputPreset.aspect_ratio_per_frame}`);
+
+    try {
+      const res = await fetch('/api/preview', { method:'POST', body: fd });
+      const text = await res.text();
+      let data = null;
+      try { data = JSON.parse(text); } catch(_e) {}
+
+      if (!res.ok){
+        const msg = (data && (data.error || data.message)) ? (data.error || data.message) : text;
+        showToast('Error');
+        setGenerating(false, '');
+        if (DOM.genStatus) DOM.genStatus.textContent = String(msg || 'Request failed');
+        return;
+      }
+
+      const images = (data && data.images) ? data.images : [];
+      renderResults(images, outputPreset);
+      setGenerating(false, DOM.genMeta ? DOM.genMeta.textContent : '');
+      if (data && data.warning && DOM.genStatus){
+        DOM.genStatus.textContent = data.warning;
+      }
+    } catch (e){
+      showToast('Error');
+      setGenerating(false, '');
+      if (DOM.genStatus) DOM.genStatus.textContent = String(e && e.message ? e.message : e);
+    }
+  }
+
+  /* =========================================================
+     ✅ Mode / Refresh
+  ========================================================== */
+  function setMode(mode){
+    state.mode = (mode === 'vertical') ? 'vertical' : 'grid';
+
+    DOM.tabGrid.classList.toggle('active', state.mode === 'grid');
+    DOM.tabVertical.classList.toggle('active', state.mode === 'vertical');
+    DOM.tabGrid.setAttribute('aria-selected', state.mode === 'grid' ? 'true' : 'false');
+    DOM.tabVertical.setAttribute('aria-selected', state.mode === 'vertical' ? 'true' : 'false');
+
+    DOM.gridBlock.classList.toggle('show', state.mode === 'grid');
+    DOM.verticalBlock.classList.toggle('show', state.mode === 'vertical');
+
+    refresh();
+  }
+
+  function refresh(){
+    renderOverlayCheckboxes();
+
+    const outputPreset = resolveOutputPresetLocal();
+    const selectedIdx = getSelectionIndicesForOutput();
+    const frames = generateFramesBySelection(selectedIdx);
+
+    const p = basePrompt(outputPreset, DOM.gridPreset.value, DOM.verticalPreset.value, frames);
+    applyVerticalEnforcement(p);
+    applyProductType(p, DOM.productType.value);
+    applySelections(p, DOM.visualStyle.value, DOM.custom.value);
+    applyHumanUsage(p, DOM.humanUsage.value, DOM.productType.value, DOM.custom.value);
+
+    DOM.hiddenOut.value = JSON.stringify(p, null, 2);
+  }
+
+  /* =========================================================
+     ✅ EVENTS
+  ========================================================== */
+  DOM.langKR.addEventListener('click', ()=>{ applyLang('kr'); refresh(); });
+DOM.langEN.addEventListener('click', ()=>{ applyLang('en'); refresh(); });
+
+  DOM.tabGrid.addEventListener('click', ()=>setMode('grid'));
+  DOM.tabVertical.addEventListener('click', ()=>setMode('vertical'));
+
+  [DOM.gridPreset, DOM.verticalPreset, DOM.productType, DOM.humanUsage, DOM.visualStyle, DOM.custom].forEach(el=>{
+    el.addEventListener('change', refresh);
+    el.addEventListener('input', refresh);
+  });
+
+  if (DOM.generateBtn){
+    DOM.generateBtn.addEventListener('click', doGenerate);
+  }
+  DOM.copyBtn.addEventListener('click', doCopy);
+
+  DOM.closeFallback.addEventListener('click', closeFallback);
+  DOM.fallback.addEventListener('click', (e)=>{ if(e.target === DOM.fallback) closeFallback(); });
+
+  DOM.heroPrev.addEventListener('click', ()=> setHeroIndex(state.heroIndex - 1));
+  DOM.heroNext.addEventListener('click', ()=> setHeroIndex(state.heroIndex + 1));
+
+  window.addEventListener('error', ()=>showToast('스크립트 오류'));
+  window.addEventListener('unhandledrejection', ()=>showToast('스크립트 오류'));
+
+  /* =========================================================
+     ✅ INIT
+  ========================================================== */
+  applyLang(state.lang);
+  setHeroIndex(0);
+  refresh();
+
+})();
+</script>
+</body>
+</html>
