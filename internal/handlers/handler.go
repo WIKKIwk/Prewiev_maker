@@ -11,6 +11,7 @@ import (
 
 	"pro-banana-ai-bot/internal/gemini"
 	"pro-banana-ai-bot/internal/mediagroup"
+	"pro-banana-ai-bot/internal/preview"
 	"pro-banana-ai-bot/internal/session"
 	"pro-banana-ai-bot/internal/telegram"
 )
@@ -20,6 +21,7 @@ type Options struct {
 	Gemini   *gemini.Client
 	Sessions *session.Store
 	Logger   *slog.Logger
+	Preview  *preview.Store
 }
 
 type Handler struct {
@@ -28,6 +30,7 @@ type Handler struct {
 	sessions   *session.Store
 	logger     *slog.Logger
 	aggregator *mediagroup.Aggregator
+	preview    *preview.Store
 }
 
 func New(opts Options) *Handler {
@@ -36,11 +39,17 @@ func New(opts Options) *Handler {
 		logger = slog.Default()
 	}
 
+	pv := opts.Preview
+	if pv == nil {
+		pv = preview.NewStore()
+	}
+
 	return &Handler{
 		tg:       opts.Telegram,
 		gem:      opts.Gemini,
 		sessions: opts.Sessions,
 		logger:   logger,
+		preview:  pv,
 	}
 }
 
@@ -49,6 +58,10 @@ func (h *Handler) SetMediaGroupAggregator(ag *mediagroup.Aggregator) {
 }
 
 func (h *Handler) HandleUpdate(ctx context.Context, update telegram.Update) error {
+	if update.CallbackQuery != nil {
+		return h.handleCallback(ctx, update.CallbackQuery)
+	}
+
 	if update.Message == nil {
 		return nil
 	}
@@ -78,6 +91,16 @@ func (h *Handler) HandleMediaGroup(ctx context.Context, group mediagroup.Group) 
 	if caption == "" {
 		caption = "Bu rasmlarni tahlil qiling"
 	}
+
+	if cmd, args, ok := parseLeadingCommand(caption); ok {
+		switch cmd {
+		case "preview", "cover":
+			if err := h.handlePreview(ctx, group.ChatID, group.UserID, group.Username, cmd, args, group.FileIDs); err != nil {
+				h.logger.Error("preview processing failed", "err", err)
+			}
+			return
+		}
+	}
 	if err := h.processPhotos(ctx, group.ChatID, group.UserID, group.Username, caption, group.FileIDs); err != nil {
 		h.logger.Error("media group processing failed", "err", err)
 	}
@@ -92,6 +115,9 @@ func (h *Handler) handleCommand(ctx context.Context, chatID int64, userID int64,
 				"Buyruqlar:\n"+
 				"/start - Botni ishga tushirish\n"+
 				"/help - Yordam\n"+
+				"/preview - Marketplace preview (wizard)\n"+
+				"/cover - 1 ta cover (wizard)\n"+
+				"/cancel - Preview wizardni bekor qilish\n"+
 				"/image <tavsif> - Rasm yaratish\n"+
 				"/clear - Suhbat tarixini tozalash",
 		)
@@ -100,9 +126,23 @@ func (h *Handler) handleCommand(ctx context.Context, chatID int64, userID int64,
 			"🍌 Yordam\n\n"+
 				"Matn yuboring — javob beraman.\n"+
 				"Rasm yuboring — tahlil/tahrir qilaman.\n"+
+				"/preview — marketplace uchun pro preview (web'dagidek presetlar bilan).\n"+
+				"/cover — marketplace cover (1 ta rasm).\n"+
+				"/cancel — preview wizardni bekor qilish.\n"+
 				"/image <tavsif> — rasm yaratish.\n"+
 				"/clear — suhbat tarixini tozalash.",
 		)
+	case "preview":
+		return h.startPreviewWizard(chatID, userID, msg.CommandArguments(), false)
+	case "cover":
+		return h.startPreviewWizard(chatID, userID, msg.CommandArguments(), true)
+	case "cancel":
+		h.preview.Update(chatID, userID, func(st *preview.UIState) {
+			st.AwaitingCustom = false
+			st.AwaitingPhoto = false
+			st.Menu = "main"
+		})
+		return h.tg.SendText(chatID, "✅ Bekor qilindi.")
 	case "clear":
 		h.sessions.Clear(userID)
 		return h.tg.SendText(chatID, "✅ Suhbat tarixi tozalandi!")
@@ -147,6 +187,21 @@ func (h *Handler) handleText(ctx context.Context, chatID int64, userID int64, us
 		return nil
 	}
 
+	if st := h.preview.Get(chatID, userID); st.AwaitingCustom {
+		updated := h.preview.Update(chatID, userID, func(st *preview.UIState) {
+			st.Custom = text
+			st.AwaitingCustom = false
+			st.Menu = "main"
+		})
+		_ = h.tg.SendText(chatID, "✅ Note saqlandi.")
+		if updated.MessageID != 0 {
+			if err := h.renderPreviewUI(chatID, userID, updated.MessageID, true); err == nil {
+				return nil
+			}
+		}
+		return h.renderPreviewUI(chatID, userID, 0, false)
+	}
+
 	h.tg.SendTyping(chatID)
 
 	history := h.sessions.Snapshot(userID, username)
@@ -182,7 +237,26 @@ func (h *Handler) handlePhoto(ctx context.Context, chatID int64, userID int64, u
 		return nil
 	}
 
-	caption := strings.TrimSpace(msg.Caption)
+	rawCaption := strings.TrimSpace(msg.Caption)
+	if cmd, args, ok := parseLeadingCommand(rawCaption); ok {
+		switch cmd {
+		case "preview", "cover":
+			return h.handlePreview(ctx, chatID, userID, username, cmd, args, []string{fileID})
+		}
+	}
+
+	if st := h.preview.Get(chatID, userID); st.AwaitingPhoto || (rawCaption == "" && st.MessageID != 0 && !st.AwaitingCustom) {
+		updated := h.preview.Update(chatID, userID, func(st *preview.UIState) {
+			st.LastPhotoFileID = fileID
+			st.AwaitingPhoto = false
+			st.AwaitingCustom = false
+			st.Menu = "main"
+		})
+		_ = username
+		return h.renderPreviewUI(chatID, userID, updated.MessageID, true)
+	}
+
+	caption := rawCaption
 	if caption == "" {
 		caption = "Bu rasmni tahlil qiling"
 	}
@@ -277,4 +351,71 @@ func toGeminiHistory(history []session.HistoryMessage) []gemini.Message {
 		})
 	}
 	return out
+}
+
+func parseLeadingCommand(text string) (cmd string, args string, ok bool) {
+	text = strings.TrimSpace(text)
+	if !strings.HasPrefix(text, "/") {
+		return "", "", false
+	}
+
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return "", "", false
+	}
+
+	token := fields[0]
+	if !strings.HasPrefix(token, "/") {
+		return "", "", false
+	}
+
+	token = strings.TrimPrefix(token, "/")
+	if at := strings.IndexByte(token, '@'); at >= 0 {
+		token = token[:at]
+	}
+	token = strings.ToLower(strings.TrimSpace(token))
+	if token == "" {
+		return "", "", false
+	}
+
+	return token, strings.TrimSpace(text[len(fields[0]):]), true
+}
+
+func (h *Handler) handlePreview(ctx context.Context, chatID int64, userID int64, username, cmd, args string, fileIDs []string) error {
+	_ = ctx
+	_ = username
+
+	if len(fileIDs) == 0 {
+		return h.tg.SendText(chatID, "❌ Rasm topilmadi.")
+	}
+
+	defaults := preview.Options{
+		Mode:          "grid",
+		GridPreset:    "3x3",
+		VerticalCount: "4",
+	}
+	if cmd == "cover" {
+		defaults.GridPreset = "1x1"
+		defaults.AspectRatio = "1:1"
+		defaults.VisualStyle = "high_key_clean"
+	}
+
+	opts := preview.ParseArgs(args, defaults)
+
+	updated := h.preview.Update(chatID, userID, func(st *preview.UIState) {
+		st.Mode = opts.Mode
+		st.GridPreset = opts.GridPreset
+		st.VerticalCount = opts.VerticalCount
+		st.AspectRatio = opts.AspectRatio
+		st.ProductType = opts.ProductType
+		st.VisualStyle = opts.VisualStyle
+		st.HumanUsage = opts.HumanUsage
+		if strings.TrimSpace(opts.Custom) != "" {
+			st.Custom = opts.Custom
+		}
+		st.LastPhotoFileID = fileIDs[0]
+		st.AwaitingPhoto = false
+		st.Menu = "main"
+	})
+	return h.renderPreviewUI(chatID, userID, updated.MessageID, true)
 }
