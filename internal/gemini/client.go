@@ -34,7 +34,8 @@ type Options struct {
 }
 
 type ChatOptions struct {
-	WantImage bool
+	WantImage   bool
+	AspectRatio string // e.g. "1:1", "3:4", "9:16"
 }
 
 type Client struct {
@@ -77,8 +78,12 @@ func (c *Client) Chat(ctx context.Context, history []Message, currentPrompt stri
 
 	if len(images) > 0 {
 		model = modelImage
+		generationConfig.Temperature = 0.2
 		if opts.WantImage {
-			generationConfig.ResponseModalities = []string{"IMAGE", "TEXT"}
+			generationConfig.ResponseModalities = []string{"IMAGE"}
+			if ar := strings.TrimSpace(opts.AspectRatio); ar != "" {
+				generationConfig.ImageConfig = &imageConfig{AspectRatio: ar}
+			}
 		}
 	} else {
 		generationConfig.ThinkingConfig = &thinkingConfig{ThinkingBudget: 32768}
@@ -91,9 +96,14 @@ func (c *Client) Chat(ctx context.Context, history []Message, currentPrompt stri
 	}
 
 	resp, err := c.generateContent(ctx, model, req)
-	if err != nil && generationConfig.ThinkingConfig != nil {
-		if isUnknownFieldError(err, "thinkingConfig") {
+	if err != nil {
+		if generationConfig.ThinkingConfig != nil && isUnknownFieldError(err, "thinkingConfig") {
 			generationConfig.ThinkingConfig = nil
+			req.GenerationConfig = generationConfig
+			return c.generateContent(ctx, model, req)
+		}
+		if generationConfig.ImageConfig != nil && isUnknownFieldError(err, "imageConfig") {
+			generationConfig.ImageConfig = nil
 			req.GenerationConfig = generationConfig
 			return c.generateContent(ctx, model, req)
 		}
@@ -169,6 +179,9 @@ func buildContents(history []Message, currentPrompt string, images []ImageInput,
 
 	var currentParts []part
 	if len(images) <= 1 {
+		if len(images) == 1 {
+			promptText += "\n\nRasm: target/edit (asosiy mahsulotni aynan saqlang; faqat fon/yoritish/kompozitsiyani o'zgartiring)."
+		}
 		currentParts = []part{{Text: promptText}}
 		for _, img := range images {
 			currentParts = append(currentParts, part{
@@ -180,7 +193,7 @@ func buildContents(history []Message, currentPrompt string, images []ImageInput,
 		}
 	} else {
 		currentParts = []part{{
-			Text: promptText + "\n\nRasm tartibi:\n1) reference/style\n2) target/edit\nQolganlari: qo'shimcha reference.",
+			Text: promptText + "\n\nRasm tartibi:\n1) reference/style\n2) target/edit (asosiy mahsulotni saqlash)\nQolganlari: qo'shimcha reference.\n\nIMPORTANT: target/edit rasmdagi mahsulotni o'zgartirmang; faqat fon/yoritish/kompozitsiyani yangilang.",
 		}}
 
 		for i, img := range images {
