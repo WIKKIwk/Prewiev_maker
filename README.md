@@ -1,8 +1,8 @@
 <div align="center">
-🍌 **Pro Banana AI Telegram Bot**
+🍌 **Pro Banana AI (Telegram Bot + Web Generator)**
 </div>
 
-# Telegram Bot - Gemini AI asosida (Go)
+# Telegram Bot + Web Generator — Gemini AI asosida (Go)
 
 Eng kuchli Gemini 3 Pro modeli asosidagi Telegram AI bot. 2K sifatli rasm tahrirlash va yuqori mantiqiy fikrlash qobiliyatiga ega.
 
@@ -11,6 +11,7 @@ Eng kuchli Gemini 3 Pro modeli asosidagi Telegram AI bot. 2K sifatli rasm tahrir
 ✅ **Gemini 3 Pro** - Kuchli matn generatsiya va murakkab fikrlash  
 ✅ **Gemini 2.5 Flash** - Rasm tahlil va generatsiya  
 ✅ **Rasm yaratish** - AI orqali rasm yaratish  
+✅ **Web Generator** - Product shot / preview generator (rasm + preset)  
 ✅ **Suhbat tarixi** - Kontekstli suhbat  
 ✅ **O'zbek tili** - To'liq o'zbek tili qo'llab-quvvatlash
 
@@ -45,6 +46,14 @@ go mod download
 go run ./cmd/bot
 ```
 
+### 3.1. Web Generator (Lokal)
+
+```bash
+go run ./cmd/web
+```
+
+So'ng brauzerda oching: `http://localhost:8080`
+
 ### 4. Docker bilan Ishga Tushirish
 
 **Talablar:** Docker va Docker Compose
@@ -60,10 +69,15 @@ docker-compose logs -f
 docker-compose down
 ```
 
+Web UI: `http://localhost:8080` (docker-compose bilan `web` servisi)
+
 ## Bot Buyruqlari
 
 - `/start` - Botni ishga tushirish
 - `/help` - Yordam va ma'lumot
+- `/preview` - Marketplace preview wizard (presetlar + frame tanlash)
+- `/cover` - Marketplace cover wizard (1 ta rasm, default 1:1)
+- `/cancel` - Preview wizardni bekor qilish
 - `/image <tavsif>` - Rasm yaratish
 - `/clear` - Suhbat tarixini tozalash
 
@@ -71,13 +85,17 @@ docker-compose down
 
 1. **Matnli savol** - Bot AI orqali javob beradi
 2. **Rasm yuborish** - Bot rasmni tahlil qiladi  
-3. **Rasm yaratish** - `/image banana robot` kabi buyruq yuboring
+3. **Marketplace preview/cover** - `/preview` yoki `/cover` ni bosing, mahsulot rasmini yuboring, so‘ng `Generate` tugmasini bosing
+4. **Rasm yaratish** - `/image banana robot` kabi buyruq yuboring
 
 ## Arxitektura
 
 ```
 cmd/bot/
 └── main.go                   # Entry point
+cmd/web/
+├── main.go                   # Web server + /api/preview
+└── static/                   # UI (index.html)
 internal/
 ├── config/                   # ENV/config
 ├── gemini/                   # Gemini API client

@@ -12,6 +12,7 @@ COPY cmd ./cmd
 COPY internal ./internal
 
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/bot ./cmd/bot
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/web ./cmd/web
 
 FROM alpine:3.20
 
@@ -20,6 +21,7 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /out/bot /app/bot
+COPY --from=builder /out/web /app/web
 
 ENV NODE_ENV=production
 

@@ -19,3 +19,18 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pro-banana-web
+    restart: unless-stopped
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - WEB_ADDR=:8080
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    command: ["/app/web"]
